@@ -83,6 +83,8 @@ void main(void)
 	status = load_package();
 	if(status == 0 )
 		load_image(&uboot_base, &optee_base, &monitor_base, &rtos_base, &opensbi_base, &dtb_base);
+  else if(status == 1)
+    goto _BOOT_ALIOS;
 	else
 		goto _BOOT_ERROR;
 
@@ -120,22 +122,39 @@ void main(void)
 
 	printf("Jump to second Boot.\n");
 	if (opensbi_base) {
-			boot0_jmp_opensbi(opensbi_base, dtb_base, uboot_base);
+    printf("jump to opensbi.\n");
+		//boot0_jmp_opensbi(opensbi_base, dtb_base, uboot_base);
+extern void boot0_jmp_mmode_uboot(phys_addr_t addr, phys_addr_t dtb_addr);
+    printf("jump to u-boot at addr 0x%x. dtb addr 0x%x\n", (uint64_t)uboot_base, (uint64_t)dtb_base);
+		boot0_jmp_mmode_uboot(uboot_base, dtb_base);
 	} else if (monitor_base) {
+    printf("jump to monitor.\n");
 		struct spare_monitor_head *monitor_head =
 			(struct spare_monitor_head *)((phys_addr_t)monitor_base);
 		monitor_head->secureos_base = optee_base;
 		monitor_head->nboot_base = uboot_base;
 		boot0_jmp_monitor(monitor_base);
-	} else if (optee_base)
+	} else if (optee_base) {
+    printf("jump to optee.\n");
 		boot0_jmp_optee(optee_base, uboot_base);
+  }
 	else if (rtos_base) {
-		printf("jump to rtos\n");
+		printf("jump to rtos.\n");
 		boot0_jmp(rtos_base);
 	}
-	else
-		boot0_jmp(uboot_base);
+	else {
+extern void boot0_jmp_mmode_uboot(phys_addr_t addr, phys_addr_t dtb_addr);
+    printf("jump to u-boot at addr 0x%x. dtb addr 0x%x\n", (uint64_t)uboot_base, (uint64_t)dtb_base);
+		boot0_jmp_mmode_uboot(uboot_base, dtb_base);
+  }
+  goto _BOOT_HALT;
 
+_BOOT_ALIOS:
+	printf("jump to alios.\n");
+  mmu_disable();
+  boot0_jmp((phys_addr_t)0x40040000);
+
+_BOOT_HALT:
 	while(1);
 _BOOT_ERROR:
 	boot0_clear_env();

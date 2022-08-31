@@ -45,7 +45,7 @@ int load_image(phys_addr_t *uboot_base, phys_addr_t *optee_base, \
 	toc1_head = (struct sbrom_toc1_head_info *)bootpkg_base;
 	item_head = (struct sbrom_toc1_item_info *)(bootpkg_base + sizeof(struct sbrom_toc1_head_info));
 
-#ifdef BOOT_DEBUG
+//#ifdef BOOT_DEBUG
 	printf("*******************TOC1 Head Message*************************\n");
 	printf("Toc_name          = %s\n",   toc1_head->name);
 	printf("Toc_magic         = 0x%x\n", toc1_head->magic);
@@ -58,12 +58,12 @@ int load_image(phys_addr_t *uboot_base, phys_addr_t *optee_base, \
 	printf("Toc_valid_len     = 0x%x\n", toc1_head->valid_len);
 	printf("TOC_MAIN_END      = 0x%x\n", toc1_head->end);
 	printf("*************************************************************\n");
-#endif
+//#endif
 	//init
 	toc1_item = item_head;
 	for(i=0;i<toc1_head->items_nr;i++,toc1_item++)
 	{
-#ifdef BOOT_DEBUG
+//#ifdef BOOT_DEBUG
 		printf("*******************TOC1 Item Message*************************\n");
 		printf("Entry_name        = %s\n",   toc1_item->name);
 		printf("Entry_data_offset = 0x%x\n", toc1_item->data_offset);
@@ -75,9 +75,9 @@ int load_image(phys_addr_t *uboot_base, phys_addr_t *optee_base, \
 		printf("index             = 0x%x\n", toc1_item->index);
 		printf("Entry_end         = 0x%x\n", toc1_item->end);
 		printf("*************************************************************\n");
-#else
+//#else
 		printf("Entry_name        = %s\n",   toc1_item->name);
-#endif
+//#endif
 
 		image_base = toc1_item->run_addr;
 		if (strncmp(toc1_item->name, ITEM_UBOOT_NAME, sizeof(ITEM_UBOOT_NAME)) == 0) {

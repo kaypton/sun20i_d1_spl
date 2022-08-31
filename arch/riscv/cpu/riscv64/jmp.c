@@ -8,6 +8,12 @@ void boot0_jmp(phys_addr_t addr)
     asm volatile("jr a0");
 }
 
+void boot0_jmp_mmode_uboot(phys_addr_t addr, phys_addr_t dtb_addr)
+{
+  void (*fn)(uint32_t, phys_addr_t) = (void *)addr;
+  fn(0, dtb_addr);
+}
+
 void boot0_jmp_optee(phys_addr_t optee, phys_addr_t uboot)
 {
 	phys_addr_t dtb_entry = uboot + 2 * 1024 * 1024;

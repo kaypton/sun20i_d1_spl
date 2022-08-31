@@ -66,17 +66,33 @@ void update_flash_para(phys_addr_t uboot_base)
 	}
 }
 
+enum image_type
+{
+  TOC1,
+  ALIOS,
+  NONE,
+};
+
+struct alios_image_head
+{
+  uint32_t reserve;
+  uint32_t magic1;
+  uint32_t magic2;
+};
 
 int load_toc1_from_sdmmc(char *buf)
 {
 	u8  *tmp_buff = (u8 *)CONFIG_BOOTPKG_BASE;
 	uint total_size;
 	sbrom_toc1_head_info_t	*toc1_head;
+  struct alios_image_head *alios_head;
 	int  card_no;
 	int ret =0;
 	int start_sector,i;
 	int error_num = E_SDMMC_OK;
-	int start_sectors[4] = {UBOOT_START_SECTOR_IN_SDMMC,UBOOT_BACKUP_START_SECTOR_IN_SDMMC,0,0};
+	int start_sectors[4] = {32800, 24576, 0, 0};
+  enum image_type image_type = NONE;
+
 	boot_sdcard_info_t  *sdcard_info = (boot_sdcard_info_t *)buf;
 	mmc_config_addr = (u32)((phys_addr_t)(BT0_head.prvt_head.storage_data));
 
@@ -101,8 +117,9 @@ int load_toc1_from_sdmmc(char *buf)
 		goto __ERROR_EXIT;;
 	}
 
-	for(i=0; i < 4; i++)
+	for(i=0; i < sizeof(start_sectors) / sizeof(start_sectors[0]); i++)
 	{
+    image_type = NONE;
 		start_sector = start_sectors[i];
 		tmp_buff = (u8 *)CONFIG_BOOTPKG_BASE;
 		if(start_sector == 0)
@@ -117,34 +134,66 @@ int load_toc1_from_sdmmc(char *buf)
 			goto __ERROR_EXIT;
 		}
 		toc1_head = (struct sbrom_toc1_head_info *)tmp_buff;
-		if(toc1_head->magic != TOC_MAIN_INFO_MAGIC)
+		if(toc1_head->magic == TOC_MAIN_INFO_MAGIC)
 		{
-			printf("error:bad magic.\n");
-			continue;
+      image_type = TOC1;
+			printf("toc1 image at start sector %d.\n", start_sector);
 		}
-		total_size = toc1_head->valid_len;
-		if(total_size > 64 * 512)
-		{
-			tmp_buff += 64*512;
-			ret = mmc_bread(card_no, start_sector + 64, (total_size - 64*512 + 511)/512, tmp_buff);
-			if(!ret)
-			{
-				error_num = E_SDMMC_READ_ERR;
-				goto __ERROR_EXIT;
-			}
-		}
+    alios_head = (struct alios_image_head *)tmp_buff;
+    if(alios_head->magic1 == 0x594b5343 || alios_head->magic2 == 0x594b5343)
+    {
+      image_type = ALIOS;
+      printf("alios image at start sector %d.\n", start_sector);
+    }
 
-		if( verify_addsum( (__u32 *)CONFIG_BOOTPKG_BASE, total_size) != 0 )
-		{
-			printf("error:bad checksum.\n");
-			continue;
-		}
-		break;
+    if(image_type == NONE){
+      printf("no valid image head at start sector %d.\n", start_sector);
+      continue;
+    }
+
+    if(image_type == TOC1)
+    {
+      total_size = toc1_head->valid_len;
+      if(total_size > 64 * 512)
+      {
+        tmp_buff += 64*512;
+        ret = mmc_bread(card_no, start_sector + 64, (total_size - 64*512 + 511)/512, tmp_buff);
+        if(!ret)
+        {
+          error_num = E_SDMMC_READ_ERR;
+          goto __ERROR_EXIT;
+        }
+      }
+
+      if( verify_addsum( (__u32 *)CONFIG_BOOTPKG_BASE, total_size) != 0 )
+      {
+        printf("error:bad checksum.\n");
+        continue;
+		  }
+      break;
+    }
+
+    if(image_type == ALIOS)
+    {
+      tmp_buff = (u8 *)0x40040000;
+      printf("loading alios ...\n");
+      int total_sector_num = 6200;
+      ret = mmc_bread(card_no, start_sector, total_sector_num, tmp_buff);
+      if(!ret)
+      {
+        error_num = E_SDMMC_READ_ERR;
+        goto __ERROR_EXIT;
+      }
+      break;
+    }
 	}
 	printf("Loading boot-pkg Succeed(index=%d).\n",
 		(BT0_head.boot_head.platform[0] & 0xf0)>>4);
 	sunxi_mmc_exit( card_no, BT0_head.prvt_head.storage_gpio, 16 );
-	return 0;
+	if(image_type == TOC1)
+    return 0;
+  if(image_type == ALIOS)
+    return 1;
 
 __ERROR_EXIT:
 	printf("Loading boot-pkg fail(error=%d)\n",error_num);
